@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hawking"
+version = "0.1.0"
+description = "Exact zero-float rational/Gaussian-rational verification instruments for discrete horizon Schur complements, Krein inertia, p-adic BTZ holography, observer-sheaf MDR, and Ramanujan 2-lift spectral floors."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+hawking = "hawking.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hawking*"]
