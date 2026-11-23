@@ -39,11 +39,18 @@ Run cleanly under all 4 isolated R4 modes:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
+
+if __package__:  # package import
+    from ._canonical import canonical_digest
+else:  # standalone script execution (python3 hawking/<module>.py), incl. python3 -I
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent))
+    from _canonical import canonical_digest
 
 
 def verify_certificate_integrity(payload: Dict[str, Any]) -> None:
@@ -886,6 +893,45 @@ def monopole_reduced_dtn_q(Lam: Sequence[Sequence[Fraction]]) -> Tuple[List[List
     return (red, phi)
 
 
+def severed_dtn_q(
+    n_verts: int,
+    edges: Sequence[Tuple[int, int, Fraction]],
+    bnd: Sequence[int],
+) -> List[List[Fraction]]:
+    """Exact (unsigned) DtN Schur complement of a possibly disconnected severed graph.
+
+    Only connected components meeting the boundary contribute to the boundary response.
+    Interior components with no boundary vertex are floating zero-modes: they are decoupled
+    from B and from every reachable component, so dropping them from the Schur complement is
+    exact, and it keeps every grounded Dirichlet block positive definite (invert_q never
+    receives a singular interior block). Unlike signed_dtn_q this helper never calls
+    validate_graph: a severed graph is allowed to be disconnected.
+    """
+    bnd_list = list(bnd)
+    bnd_set = set(bnd_list)
+    adj: List[List[int]] = [[] for _ in range(n_verts)]
+    for eu, ev, _ew in edges:
+        adj[eu].append(ev)
+        adj[ev].append(eu)
+    seen = set(bnd_list)
+    stack = list(bnd_list)
+    while stack:
+        cur = stack.pop()
+        for nxt in adj[cur]:
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    inter = [x for x in range(n_verts) if x not in bnd_set and x in seen]
+    L = build_signed_laplacian_q(n_verts, edges, [1] * len(edges))
+    L_bb = [[L[i][j] for j in bnd_list] for i in bnd_list]
+    if not inter:
+        return L_bb
+    L_bi = [[L[i][j] for j in inter] for i in bnd_list]
+    L_ib = [[L[i][j] for j in bnd_list] for i in inter]
+    L_ii = [[L[i][j] for j in inter] for i in inter]
+    return mat_sub_q(L_bb, mat_mul_q(mat_mul_q(L_bi, invert_q(L_ii)), L_ib))
+
+
 def verify_single_edge_surgical_krein(
     name: str,
     n_verts: int,
@@ -898,7 +944,12 @@ def verify_single_edge_surgical_krein(
       (a) Universal Surgical Edge-Severing Identity:
             Lam_red(chi_{e*}) == Lam^{(G \\ {e*})}(1)
                               == Lam^{(G)}(1) - (w_{e*} / c_harm^{(B)}(e*)) (h_u - h_v)(h_u - h_v)^T
-          whenever c_harm^{(B)}(e*) > 0;
+          whenever c_harm^{(B)}(e*) > 0, and in the division-free exact form
+            c_harm^{(B)}(e*) * (Lam^{(G)}(1) - Lam_red) == w_{e*} (h_u - h_v)(h_u - h_v)^T
+          at c_harm^{(B)}(e*) == 0 (dead bridge), with the severed DtN taken over the
+          boundary-connected components of the severed graph only (floating interior
+          components are exact zero-modes and are dropped, keeping every grounded
+          Dirichlet block nonsingular);
       (b) Exact Rank-2 Krein-Woodbury formula for Delta_Lam and Phi_B on interior flips;
       (c) Exact 3-way Krein Inertia Trichotomy on Delta_Lam = Lam(chi_{e*}) - Lam(1):
             - Case I  (hu != hv):             (1, |B|-2, 1)
@@ -954,10 +1005,58 @@ def verify_single_edge_surgical_krein(
 
     # Verify exact Krein inertia trichotomy
     if c_harm_b == 0:
+        # Dead bridge: c_harm_B == 0  <=>  w * R_eff^(B)(u, v) == 1. Nothing is assumed:
+        # every listed check below is genuinely executed.
         trichotomy_ok = (expected_case == "case_III_dead_bridge") and hu_eq_hv and (phi == 0) and (inert_delta == (0, nb, 0))
-        surgical_exact = True
-        rayleigh_exact = True
+
+        # (a) Surgical severing with exact disconnection handling: severing e* may split G
+        # into components, and interior components with no boundary vertex are floating
+        # zero-modes contributing nothing to the boundary DtN map. severed_dtn_q drops them,
+        # keeping every grounded Dirichlet block positive definite (invert_q never sees a
+        # singular interior) and never calling validate_graph on a disconnected graph.
+        cut_edges = [e for k, e in enumerate(clean_edges) if k != flip_idx]
+        Lam_cut = severed_dtn_q(n_verts, cut_edges, bnd_list)
+        surgical_exact = (Lam_red == Lam_cut)
+
+        # (b) Rayleigh rank-1 severing law in division-free exact form
+        #         c_harm_B * (Lam(G) - Lam_red) == w * dh dh^T
+        #     valid also at c_harm_B == 0, where it forces dh == 0 and Lam_red == Lam(G).
+        rayleigh_exact = all(
+            c_harm_b * (Lam_plus[r][c] - Lam_red[r][c]) == w * dh[r] * dh[c]
+            for r in range(nb)
+            for c in range(nb)
+        )
+
+        # (c) Krein-Woodbury 2x2 law at c_harm_B == 0: k22 == 0, hence det_k == -k12^2 <= 0.
+        #     When k12 != 0 the 2x2 system stays nonsingular and the reconstruction is
+        #     checked exactly (inv_k[0][0] == 0 then forces Phi == 0 and Delta == 0 through
+        #     dh == 0). When k12 == 0 the rank-2 law degenerates identically to the exact
+        #     statement Delta == 0 and Phi == 0.
         woodbury_exact = True
+        if u in idx_i and v in idx_i:
+            iu, iv = idx_i[u], idx_i[v]
+            k11 = Fraction(1) / w + L_ii_inv[iu][iu] + L_ii_inv[iv][iv] + Fraction(2) * L_ii_inv[iu][iv]
+            k22 = -c_harm_b / w
+            k12 = L_ii_inv[iu][iu] - L_ii_inv[iv][iv]
+            det_k = k11 * k22 - k12 * k12
+            if det_k != 0:
+                p_plus = [H_all[u][j] + H_all[v][j] for j in range(nb)]
+                inv_k = [[k22 / det_k, -k12 / det_k], [-k12 / det_k, k11 / det_k]]
+                delta_rec = [
+                    [
+                        inv_k[0][0] * p_plus[r] * p_plus[c]
+                        + inv_k[0][1] * (p_plus[r] * dh[c] + dh[r] * p_plus[c])
+                        + inv_k[1][1] * dh[r] * dh[c]
+                        for c in range(nb)
+                    ]
+                    for r in range(nb)
+                ]
+                phi_rec = Fraction(4) * inv_k[0][0]
+                woodbury_exact = (Delta == delta_rec) and (phi == phi_rec)
+            else:
+                woodbury_exact = (phi == 0) and all(
+                    Delta[r][c] == 0 for r in range(nb) for c in range(nb)
+                )
     else:
         if hu_eq_hv:
             trichotomy_ok = (
@@ -1433,8 +1532,7 @@ def main() -> None:
     args = parser.parse_args()
 
     payload = build_certificate()
-    canonical = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    canonical, digest = canonical_digest(payload)
 
     if args.write_cert is not None:
         args.write_cert.write_text(canonical, encoding="utf-8", newline="\n")
