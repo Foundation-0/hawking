@@ -2,7 +2,7 @@
 
 **Author:** `fractals-probe`  
 **Exclusive Workspace:** `symbiosis/round3/hawking-bridge/padic_btz_leech_holography/`  
-**Executable Verifier:** [`hawking/padic_btz_leech.py`](../hawking/padic_btz_leech.py) (`100%` pure Python 3 standard library `fractions.Fraction` + `int`, zero `numpy`, zero floats, zero bare `assert`s; `0.28s` runtime; `4/4` isolated `-I` bit-identical stdout SHA-256 `023abda79ee809a5397bdf860ecfaf4ece8904a8e665fb91e16bb32f13ed4403`)  
+**Executable Verifier:** [`hawking/padic_btz_leech.py`](../hawking/padic_btz_leech.py) (`100%` pure Python 3 standard library `fractions.Fraction` + `int`, zero `numpy`, zero floats, zero bare `assert`s; `0.28s` runtime; `4/4` isolated `-I` bit-identical stdout SHA-256 `c36ee806a532b755718c811a0a2374c5c15392be6c9361b6e084fabfbceeb297`)  
 **Machine Certificate:** Regenerated deterministically via `PYTHONPATH=. python3 -s -B -m hawking.padic_btz_leech --json` (`canonical_sha256`: `747d96561b9cc6a4ec412e7f0c2af86b67cc7a9e0b8e0402a454dd7377cae273`)
 
 ---
@@ -78,7 +78,7 @@ Direct inspection of `padic_ml/_array.py` & `padic_ml/ops.py` (`53ffd9e79890e76b
 for f in "-I -B" "-I -O -B" "-I -B -W error" "-I -O -B -W error"; do
   python3 $f padic_btz_leech_holography.py --json | sha256sum
 done
-# Expected (4/4 identical): 023abda79ee809a5397bdf860ecfaf4ece8904a8e665fb91e16bb32f13ed4403
+# Expected (4/4 identical): c36ee806a532b755718c811a0a2374c5c15392be6c9361b6e084fabfbceeb297
 ```
 
 All `8/8` must-fail R5 controls (`C1`–`C8`) reject cleanly.
