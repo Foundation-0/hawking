@@ -30,11 +30,18 @@ Run cleanly under all 4 isolated R4 modes:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
+
+if __package__:  # package import
+    from ._canonical import canonical_digest
+else:  # standalone script execution (python3 hawking/<module>.py), incl. python3 -I
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent))
+    from _canonical import canonical_digest
 
 
 def check(cond: bool, msg: str) -> None:
@@ -1004,8 +1011,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     payload = build_certificate()
-    canonical = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    canonical, digest = canonical_digest(payload)
 
     if args.write_cert is not None:
         args.write_cert.write_text(canonical, encoding="utf-8", newline="\n")
