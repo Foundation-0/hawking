@@ -1031,8 +1031,10 @@ def verify_single_edge_surgical_krein(
         #     When k12 != 0 the 2x2 system stays nonsingular and the reconstruction is
         #     checked exactly (inv_k[0][0] == 0 then forces Phi == 0 and Delta == 0 through
         #     dh == 0). When k12 == 0 the rank-2 law degenerates identically to the exact
-        #     statement Delta == 0 and Phi == 0.
-        woodbury_exact = True
+        #     statement Delta == 0 and Phi == 0. The 2x2 reconstruction is defined for
+        #     interior flips only (it is built from L_II^{-1} at both endpoints); for collar
+        #     dead bridges (e.g. pendant edges) the same degenerate content Delta == 0,
+        #     Phi == 0 is checked directly below, so no success flag is ever assumed.
         if u in idx_i and v in idx_i:
             iu, iv = idx_i[u], idx_i[v]
             k11 = Fraction(1) / w + L_ii_inv[iu][iu] + L_ii_inv[iv][iv] + Fraction(2) * L_ii_inv[iu][iv]
@@ -1057,6 +1059,13 @@ def verify_single_edge_surgical_krein(
                 woodbury_exact = (phi == 0) and all(
                     Delta[r][c] == 0 for r in range(nb) for c in range(nb)
                 )
+        else:
+            # Collar dead bridge (boundary edges always have c_harm_B == 1): the rank-2
+            # formula is domain-inapplicable, so its degenerate exact content is verified
+            # directly instead of flagging an unrun check as passed.
+            woodbury_exact = (phi == 0) and all(
+                Delta[r][c] == 0 for r in range(nb) for c in range(nb)
+            )
     else:
         if hu_eq_hv:
             trichotomy_ok = (
