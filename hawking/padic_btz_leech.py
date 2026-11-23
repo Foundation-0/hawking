@@ -22,13 +22,20 @@ Honest Law-4 Prior-Art Attribution:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import math
 import sys
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
+if __package__:  # package import
+    from ._canonical import canonical_json, embed_canonical_sha256
+else:  # standalone script execution (python3 hawking/<module>.py), incl. python3 -I
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent))
+    from _canonical import canonical_json, embed_canonical_sha256
 
 
 # =============================================================================
@@ -61,10 +68,6 @@ def is_prime_int(p: int) -> bool:
             return False
         d += 2
     return True
-
-
-def canonical_json(obj: Any) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def frac_str(f: Fraction) -> str:
@@ -1186,8 +1189,7 @@ def run_all() -> dict[str, Any]:
         "part_4_padic_ml_valuation_audit": part4,
         "part_5_r5_controls": part5,
     }
-    canon = canonical_json(payload).encode("utf-8")
-    payload["canonical_sha256"] = hashlib.sha256(canon).hexdigest()
+    embed_canonical_sha256(payload)
     return payload
 
 
@@ -1200,7 +1202,7 @@ def main() -> int:
     args = parser.parse_args()
 
     result = run_all()
-    text = json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    text = canonical_json(result)
     if args.write_cert is not None:
         args.write_cert.write_text(text, encoding="utf-8")
     if args.json:
