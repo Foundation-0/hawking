@@ -47,8 +47,17 @@ from __future__ import annotations
 
 import argparse
 from fractions import Fraction
-import json
+import sys
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+
+if __package__:  # package import
+    from ._canonical import canonical_json
+else:  # standalone script execution (python3 hawking/<module>.py), incl. python3 -I
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent))
+    from _canonical import canonical_json
 
 
 # ---------------------------------------------------------------------------
@@ -917,7 +926,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     rep = run_all()
     if args.json:
-        print(json.dumps(rep, indent=2, sort_keys=True))
+        sys.stdout.write(canonical_json(rep))
     else:
         print("=== Observer-Equalizer Sheaf MDR & Lawvere-Godel Obstruction (Exact Q) ===")
         print(f"Atlas A: {rep['atlas_A_regime_I_gauge_illusion']['regime']} (k_grad={rep['atlas_A_regime_I_gauge_illusion']['fractions']['kappa_grad']})")
