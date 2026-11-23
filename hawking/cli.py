@@ -8,8 +8,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import sys
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
@@ -18,11 +16,7 @@ from . import boundary_double_schur_hodge
 from . import horizon_schur_modular
 from . import observer_sheaf_mdr
 from . import padic_btz_leech
-
-
-def _canonical_digest(payload: Dict[str, Any]) -> Tuple[str, str]:
-    text = json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
-    return text, hashlib.sha256(text.encode("utf-8")).hexdigest()
+from ._canonical import canonical_digest, embed_canonical_sha256
 
 
 def _count_floats(obj: Any) -> int:
@@ -67,7 +61,7 @@ def run_verify(module_choice: str = "all") -> Dict[str, Any]:
     for key in selected:
         desc, builder = _MODULES[key]
         payload = builder()
-        _, digest = _canonical_digest(payload)
+        _, digest = canonical_digest(payload)
         float_count = _count_floats(payload)
         if float_count != 0:
             raise RuntimeError(f"Module {key} emitted {float_count} float(s); zero floats required")
@@ -88,8 +82,7 @@ def run_verify(module_choice: str = "all") -> Dict[str, Any]:
         "all_verified": all(r["verified"] for r in receipts.values()),
         "receipts": receipts,
     }
-    _, bundle_sha = _canonical_digest(bundle)
-    bundle["bundle_sha256"] = bundle_sha
+    embed_canonical_sha256(bundle, "bundle_sha256")
     return bundle
 
 
@@ -121,7 +114,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "verify":
         bundle = run_verify(args.module)
         if args.json:
-            text, _ = _canonical_digest(bundle)
+            text, _ = canonical_digest(bundle)
             sys.stdout.write(text)
         else:
             print(f"=== Foundation-0/hawking v{__version__} Exact Zero-Float Verification ===")
